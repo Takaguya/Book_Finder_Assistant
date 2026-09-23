@@ -149,7 +149,9 @@ so the security rules in `firestore.rules` deny all client access.
 - **Firestore locked down.** `firestore.rules` denies all direct client access.
 - **Browser protections.** The site sends a Content Security Policy, blocks being embedded in
   other sites (clickjacking), and sets `nosniff` and a strict referrer policy. Book links and
-  cover images are only ever used as `https://` web addresses.
+  cover images are only ever used as `https://` web addresses. The assistant's replies are
+  rendered from Markdown into formatted text, never as raw HTML, and images and scripts in a
+  reply are dropped.
 - **Strict CORS.** The API only accepts browser requests from the configured frontend URLs,
   and only the methods and headers the app uses, without cookies.
 - **Secrets stay on the server.** The Gemini, Google Books and Firebase admin keys are only

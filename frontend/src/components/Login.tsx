@@ -1,6 +1,30 @@
-import { useState } from "react";
-import { signInWithGoogle } from "../lib/firebase";
+import { FirebaseError } from "firebase/app";
+import { useEffect, useState } from "react";
+import { getRedirectSignInError, signInWithGoogle } from "../lib/firebase";
 import { BrandMark } from "./BrandMark";
+
+// Turns Firebase's error codes into something a person can act on. Returns null when there's
+// nothing to report, e.g. the person closed the Google window themselves.
+function signInErrorMessage(err: unknown): string | null {
+  const code = err instanceof FirebaseError ? err.code : "";
+  switch (code) {
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+    case "auth/user-cancelled":
+      return null;
+    case "auth/network-request-failed":
+      return "Couldn't reach Google. Check your connection and try again.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
+    case "auth/unauthorized-domain":
+      return "Sign-in isn't set up for this web address yet.";
+    case "auth/operation-not-supported-in-this-environment":
+    case "auth/web-storage-unsupported":
+      return "This browser can't complete Google sign-in. Open the site in Safari or Chrome instead.";
+    default:
+      return "Sign-in didn't complete. Try again.";
+  }
+}
 
 // Decorative shelf on the sign-in screen: [height %, width px, colour var, lean deg]
 const SPINES: [number, number, string, number][] = [
@@ -18,13 +42,25 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Coming back from a redirect sign-in that failed: show why.
+  useEffect(() => {
+    let cancelled = false;
+    getRedirectSignInError().then((err) => {
+      if (!cancelled && err) setError(signInErrorMessage(err));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleSignIn() {
     setError(null);
     setLoading(true);
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in didn't complete. Try again.");
+      console.error("Google sign-in failed", err);
+      setError(signInErrorMessage(err));
     } finally {
       setLoading(false);
     }

@@ -630,8 +630,64 @@ input {
   font-size: 17px;
   line-height: 1.7;
   max-width: 62ch;
-  white-space: pre-wrap;
   color: var(--ink);
+}
+
+/* Formatted replies: the assistant's Markdown, rendered by react-markdown */
+.model-text > * {
+  margin: 0;
+}
+
+.model-text > * + * {
+  margin-top: 0.8em;
+}
+
+.model-text ul,
+.model-text ol {
+  padding-left: 1.25em;
+}
+
+.model-text li + li {
+  margin-top: 0.45em;
+}
+
+.model-text li::marker {
+  color: var(--ink-3);
+}
+
+.model-text li > p {
+  margin: 0;
+}
+
+.model-text strong {
+  font-weight: 600;
+}
+
+.model-text a {
+  color: var(--cloth);
+  text-underline-offset: 2px;
+}
+
+.model-text code {
+  font-size: 0.9em;
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+  background: var(--ground);
+}
+
+.model-text blockquote {
+  padding-left: 0.9em;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.model-text hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+}
+
+.model-heading {
+  font-weight: 600;
 }
 
 .searching {
