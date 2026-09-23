@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// The browser never talks to Firestore: every read and write goes through the backend, which
+// uses the Admin SDK and isn't subject to these rules. So no client gets any access at all,
+// not even signed-in users (who could otherwise read each other's conversations).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

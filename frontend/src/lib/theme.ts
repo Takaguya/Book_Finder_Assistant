@@ -2,8 +2,8 @@ import { useState } from "react";
 
 export type ThemeChoice = "light" | "dark" | "system";
 
-// Keep the key and resolution logic in sync with the inline script in index.html, which
-// applies the theme before first paint so the page never flashes the wrong colours.
+// Keep the key and resolution logic in sync with public/theme-init.js, which applies the theme
+// before first paint so the page never flashes the wrong colours.
 const STORAGE_KEY = "bookfinder-theme";
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 

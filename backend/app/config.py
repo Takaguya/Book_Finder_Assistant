@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     chat_history_limit: int = 20
 
+    # Per-user request limits, enforced across all server instances (see
+    # app/dependencies/rate_limit.py). Set one to 0 to turn it off.
+    rate_limit_chat_per_minute: int = 6
+    rate_limit_chat_per_day: int = 100
+    rate_limit_new_sessions_per_hour: int = 20
+    rate_limit_book_searches_per_minute: int = 20
+
+    # FastAPI's interactive docs at /docs and /openapi.json. Turn off on public deployments so the
+    # API isn't advertised.
+    api_docs_enabled: bool = True
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

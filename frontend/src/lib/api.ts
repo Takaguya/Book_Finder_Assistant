@@ -46,10 +46,18 @@ async function authHeaders(): Promise<HeadersInit> {
 }
 
 async function ensureOk(res: Response): Promise<void> {
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Request failed (${res.status}): ${body || res.statusText}`);
+  if (res.ok) return;
+  const body = await res.text().catch(() => "");
+  // The backend's errors look like {"detail": "You've used today's 100 messages…"}; show that
+  // sentence rather than raw JSON. Validation errors carry a list instead, so they fall through.
+  let detail: unknown;
+  try {
+    detail = JSON.parse(body).detail;
+  } catch {
+    // not JSON
   }
+  if (typeof detail === "string") throw new Error(detail);
+  throw new Error(`Request failed (${res.status}): ${body || res.statusText}`);
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {

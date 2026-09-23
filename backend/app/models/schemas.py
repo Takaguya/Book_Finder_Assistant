@@ -2,6 +2,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Firestore auto-generated document IDs are 20 letters and digits. Anything else can't be a real
+# session, so it's rejected before it reaches the database.
+SESSION_ID_PATTERN = r"^[A-Za-z0-9]{1,64}$"
+
 
 class BookResult(BaseModel):
     id: str
@@ -21,7 +25,8 @@ class BookSearchResponse(BaseModel):
 
 
 class ChatMessageIn(BaseModel):
-    session_id: str
+    session_id: str = Field(pattern=SESSION_ID_PATTERN)
+    # Keep in sync with MAX_MESSAGE_LENGTH in frontend/src/components/ChatPanel.tsx
     message: str = Field(min_length=1, max_length=4000)
 
 

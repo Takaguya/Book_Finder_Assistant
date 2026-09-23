@@ -4,6 +4,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { signOutUser } from "../lib/firebase";
 import { MessageBubble, type DisplayMessage } from "./MessageBubble";
 
+// Keep in sync with ChatMessageIn.message max_length in backend/app/models/schemas.py
+const MAX_MESSAGE_LENGTH = 4000;
+
 const SUGGESTIONS = [
   "A cozy fantasy for a rainy weekend",
   "Books like Project Hail Mary",
@@ -94,6 +97,10 @@ export function ChatPanel({ sessionId, title, onSessionRenamed, onToggleSidebar 
           setError("The reply took too long. Your message was saved — refresh to see the response.");
         }
       } else {
+        // A failed turn (rate limit, AI service unavailable…) saves nothing on the backend, so
+        // take the message back out of the conversation and return it to the box to resend.
+        setMessages((prev) => prev.slice(0, -1));
+        setInput(text);
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
     } finally {
@@ -171,6 +178,7 @@ export function ChatPanel({ sessionId, title, onSessionRenamed, onToggleSidebar 
             onKeyDown={handleKeyDown}
             placeholder="Ask for a book, an author, or a mood"
             aria-label="Message"
+            maxLength={MAX_MESSAGE_LENGTH}
             rows={1}
           />
           <button className="send-btn" onClick={() => handleSend()} disabled={sending || !input.trim()}>

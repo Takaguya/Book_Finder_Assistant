@@ -14,15 +14,24 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Book Finder Assistant API", lifespan=lifespan)
-
 settings = get_settings()
+
+app = FastAPI(
+    title="Book Finder Assistant API",
+    lifespan=lifespan,
+    docs_url="/docs" if settings.api_docs_enabled else None,
+    redoc_url="/redoc" if settings.api_docs_enabled else None,
+    openapi_url="/openapi.json" if settings.api_docs_enabled else None,
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # The frontend authenticates with a bearer token, never cookies, so credentials stay off,
+    # and only the methods and headers it actually sends are allowed.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(books.router)

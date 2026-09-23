@@ -1,6 +1,8 @@
 import json
 import os
+from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import TypeVar
 
 import firebase_admin
 from fastapi.concurrency import run_in_threadpool
@@ -13,6 +15,8 @@ _app: firebase_admin.App | None = None
 _db = None
 
 DEFAULT_SESSION_TITLE = "New chat"
+
+T = TypeVar("T")
 
 
 def _load_credentials(settings) -> credentials.Base:
@@ -165,6 +169,27 @@ async def get_recent_messages(uid: str, session_id: str, limit: int) -> list[dic
         ]
 
     return await run_in_threadpool(_read)
+
+
+async def update_rate_limit_state(uid: str, decide: Callable[[dict], tuple[dict | None, T]]) -> T:
+    """Atomically reads this user's rate-limit counters, lets `decide` compute the new ones, and
+    writes them back. `decide` returns (updates or None, result) and may run more than once if
+    two requests from the same user collide, so it must not have side effects."""
+
+    def _run():
+        doc_ref = _client().collection("rate_limits").document(uid)
+
+        @firestore.transactional
+        def _in_transaction(transaction):
+            snap = doc_ref.get(transaction=transaction)
+            updates, result = decide(snap.to_dict() or {})
+            if updates:
+                transaction.set(doc_ref, updates, merge=True)
+            return result
+
+        return _in_transaction(_client().transaction())
+
+    return await run_in_threadpool(_run)
 
 
 async def get_preference_summary(uid: str) -> str:

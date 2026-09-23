@@ -1,11 +1,15 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path
 from google.genai import errors as genai_errors
 
 from app.config import get_settings
 from app.dependencies.auth import get_current_user
+from app.dependencies.rate_limit import limit_chat, limit_new_sessions
 from app.models.schemas import (
+    SESSION_ID_PATTERN,
     ChatHistoryResponse,
     ChatMessageIn,
     ChatMessageOut,
@@ -21,6 +25,8 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 MAX_TITLE_LENGTH = 48
 
+SessionId = Annotated[str, Path(pattern=SESSION_ID_PATTERN)]
+
 
 @router.get("/sessions", response_model=ChatSessionListResponse)
 async def get_sessions(user: dict = Depends(get_current_user)) -> ChatSessionListResponse:
@@ -29,13 +35,13 @@ async def get_sessions(user: dict = Depends(get_current_user)) -> ChatSessionLis
 
 
 @router.post("/sessions", response_model=ChatSession, status_code=201)
-async def create_session(user: dict = Depends(get_current_user)) -> ChatSession:
+async def create_session(user: dict = Depends(limit_new_sessions)) -> ChatSession:
     session = await firebase_service.create_session(user["uid"])
     return ChatSession(**session)
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
-async def delete_session(session_id: str, user: dict = Depends(get_current_user)) -> None:
+async def delete_session(session_id: SessionId, user: dict = Depends(get_current_user)) -> None:
     # Idempotent: deleting a session that's already gone still succeeds, since the outcome
     # the client wants (the session no longer exists) holds either way.
     await firebase_service.delete_session(user["uid"], session_id)
@@ -43,7 +49,7 @@ async def delete_session(session_id: str, user: dict = Depends(get_current_user)
 
 @router.get("/sessions/{session_id}/messages", response_model=ChatHistoryResponse)
 async def get_session_messages(
-    session_id: str, user: dict = Depends(get_current_user)
+    session_id: SessionId, user: dict = Depends(get_current_user)
 ) -> ChatHistoryResponse:
     uid = user["uid"]
     if not await firebase_service.session_exists(uid, session_id):
@@ -57,7 +63,7 @@ async def get_session_messages(
 async def chat(
     payload: ChatMessageIn,
     background_tasks: BackgroundTasks,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(limit_chat),
 ) -> ChatMessageOut:
     settings = get_settings()
     uid = user["uid"]

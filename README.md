@@ -73,6 +73,9 @@ forced search.
 - The assistant sees the most recent 20 messages of a conversation (`CHAT_HISTORY_LIMIT`),
   and reopening a conversation shows those same 20 messages.
 - The sidebar lists your 50 most recent conversations.
+- To keep the service fair and affordable, each account can send up to 6 messages a minute and
+  100 a day, and start up to 20 conversations an hour. Reaching a limit shows how long until
+  you can continue.
 - Your taste summary is built automatically. It isn't shown or editable in the app, and
   deleting conversations doesn't erase it.
 - Replies arrive all at once rather than word by word.
@@ -121,10 +124,39 @@ Everything lives in Firestore under your Firebase user ID:
 users/{uid}                                  preference_summary (your taste summary)
 users/{uid}/sessions/{sessionId}             title, created_at, updated_at
 users/{uid}/sessions/{sessionId}/messages    role, text, created_at, books
+rate_limits/{uid}                            request counters for the current minute/hour/day
 ```
 
 The browser never reads Firestore directly. Only the backend does, with admin credentials,
-so the Firestore security rules can deny all client access.
+so the security rules in `firestore.rules` deny all client access.
+
+## Security and abuse protection
+
+- **Sign-in on every request.** Every endpoint except the health check requires a valid
+  Firebase ID token, verified by the backend. All data is stored under the signed-in user's
+  ID, so one account can never reach another's conversations.
+- **Per-user rate limits.** Chat messages, new conversations and book searches are limited
+  per account (see "Limitations" and `RATE_LIMIT_*` in Configuration). The counters live in
+  Firestore rather than in server memory, so they hold across every server instance, and a
+  transaction makes them exact even under a burst of simultaneous requests. A refused request
+  gets `429 Too Many Requests` with a `Retry-After` header and doesn't use up any allowance.
+- **The assistant stays on topic.** It's instructed to decline unrelated work (code, essays,
+  homework, general questions) and to ignore messages that try to override its instructions,
+  so it can't be used as a free general-purpose chatbot on your API key.
+- **Input limits.** Messages are capped at 4,000 characters, book searches at 200, and IDs are
+  checked against strict patterns before they reach Firestore or Google Books. The search size
+  the AI model can request is capped too, since its tool arguments are model output.
+- **Firestore locked down.** `firestore.rules` denies all direct client access.
+- **Browser protections.** The site sends a Content Security Policy, blocks being embedded in
+  other sites (clickjacking), and sets `nosniff` and a strict referrer policy. Book links and
+  cover images are only ever used as `https://` web addresses.
+- **Strict CORS.** The API only accepts browser requests from the configured frontend URLs,
+  and only the methods and headers the app uses, without cookies.
+- **Secrets stay on the server.** The Gemini, Google Books and Firebase admin keys are only
+  used by the backend. `.gitignore` keeps `.env` files and the service-account key out of the
+  repository. The `VITE_*` frontend values are public by design (they identify the Firebase
+  project) and contain no secrets.
+- **API docs can be switched off** with `API_DOCS_ENABLED=false`.
 
 ## Tech stack
 
@@ -145,6 +177,7 @@ backend/
     main.py                  FastAPI app, CORS, startup
     config.py                settings read from env vars / .env
     dependencies/auth.py     verifies the Firebase sign-in token on each request
+    dependencies/rate_limit.py  per-user rate limits, stored in Firestore
     routers/chat.py          conversations and the chat endpoint
     routers/books.py         direct Google Books search
     services/gemini_agent.py the assistant: instructions, search tool loop, taste summary
@@ -160,12 +193,15 @@ frontend/
     index.css                all styles
   Dockerfile
 docker-compose.yml           runs both locally
+firestore.rules              denies all direct client access to Firestore
 ```
 
 ## API
 
 Every endpoint except `/api/health` needs an `Authorization: Bearer <Firebase ID token>`
-header. Interactive docs are at `/docs` when the backend is running.
+header. `POST /api/chat`, `POST /api/chat/sessions` and the book endpoints are rate-limited
+per user and answer `429` with a `Retry-After` header when a limit is reached. Interactive docs
+are at `/docs` when the backend is running (unless `API_DOCS_ENABLED=false`).
 
 | Method | Path | What it does |
 | --- | --- | --- |
@@ -267,6 +303,13 @@ so the same images also run on container platforms that assign their own port.
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | empty | The key file's contents instead of a path, for hosts where the file can't be deployed. Takes priority when set |
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated frontend URLs allowed to call the API |
 | `CHAT_HISTORY_LIMIT` | `20` | How many recent messages the assistant sees, and how many a reopened conversation shows |
+| `RATE_LIMIT_CHAT_PER_MINUTE` | `6` | Chat messages per user per minute |
+| `RATE_LIMIT_CHAT_PER_DAY` | `100` | Chat messages per user per day (resets at 00:00 UTC) |
+| `RATE_LIMIT_NEW_SESSIONS_PER_HOUR` | `20` | New conversations per user per hour |
+| `RATE_LIMIT_BOOK_SEARCHES_PER_MINUTE` | `20` | Calls to the `/api/books` endpoints per user per minute |
+| `API_DOCS_ENABLED` | `true` | Serve `/docs` and `/openapi.json`. Set to `false` on public deployments |
+
+Setting any `RATE_LIMIT_*` value to `0` turns that limit off.
 
 Firebase credentials are looked up in this order: `FIREBASE_SERVICE_ACCOUNT_JSON`, then the
 file at `FIREBASE_SERVICE_ACCOUNT_PATH`, then Google Application Default Credentials (the
