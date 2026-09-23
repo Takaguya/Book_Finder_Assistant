@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone
 
@@ -14,18 +15,31 @@ _db = None
 DEFAULT_SESSION_TITLE = "New chat"
 
 
+def _load_credentials(settings) -> credentials.Base:
+    # 1. The key's JSON in an env var: hosts like Vercel, where a key file can't be shipped safely.
+    if settings.firebase_service_account_json:
+        try:
+            key_info = json.loads(settings.firebase_service_account_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "FIREBASE_SERVICE_ACCOUNT_JSON is set but isn't valid JSON. "
+                "Paste the entire contents of the service-account key file."
+            ) from exc
+        return credentials.Certificate(key_info)
+    # 2. The downloaded key file: local development, or Docker with the key mounted.
+    if os.path.exists(settings.firebase_service_account_path):
+        return credentials.Certificate(settings.firebase_service_account_path)
+    # 3. The host's own Google identity (Application Default Credentials): on Cloud Run no key
+    #    has to exist anywhere.
+    return credentials.ApplicationDefault()
+
+
 def init_firebase() -> None:
     global _app, _db
     if _app is not None:
         return
     settings = get_settings()
-    # Locally, use the downloaded service-account key. On Cloud Run there is no key file: the
-    # service's own identity (Application Default Credentials) is used instead, so no secret
-    # key has to be shipped with the container.
-    if os.path.exists(settings.firebase_service_account_path):
-        cred = credentials.Certificate(settings.firebase_service_account_path)
-    else:
-        cred = credentials.ApplicationDefault()
+    cred = _load_credentials(settings)
     _app = firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id} if settings.firebase_project_id else None)
     _db = firestore.client()
 

@@ -121,5 +121,7 @@ so the same images also run on container platforms that assign their own port.
   (`users/{uid}.preference_summary`). That summary, plus the last `CHAT_HISTORY_LIMIT` messages,
   is injected into the system instruction on the next turn.
 - CORS origins for the backend are controlled via `CORS_ORIGINS` in `backend/.env`.
-- The backend uses `serviceAccountKey.json` when the file exists. Without it, it falls back to
-  Google Application Default Credentials (for example, a Cloud Run service's own identity).
+- Firebase credentials are looked up in this order: the key file's JSON in the
+  `FIREBASE_SERVICE_ACCOUNT_JSON` env var (for hosts like Vercel), then the key file at
+  `FIREBASE_SERVICE_ACCOUNT_PATH`, then Google Application Default Credentials (for example, a
+  Cloud Run service's own identity).

@@ -4,12 +4,14 @@ backend/__pycache__/
 backend/**/__pycache__/
 backend/.env
 backend/serviceAccountKey.json
+backend/.vercel/
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.env
 frontend/.env.local
+frontend/.env.production
 
 # Root (docker-compose build args)
 /.env
@@ -24,3 +26,6 @@ frontend/DEPLOYMENT.md
 # OS / editors
 .DS_Store
 *.log
+
+# Claude Code personal settings
+.claude/settings.local.json

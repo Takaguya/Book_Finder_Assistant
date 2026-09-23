@@ -1,0 +1,16 @@
+# Files not uploaded when deploying this folder to Vercel.
+# Vercel bundles every file it receives into the function, so secrets must never reach it:
+# on Vercel the key comes from the FIREBASE_SERVICE_ACCOUNT_JSON env var instead.
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+serviceAccountKey.json
+
+# Used only by the Docker / Cloud Run deploys
+Dockerfile
+.dockerignore
+.gcloudignore
+cloudrun.env.yaml
+DEPLOYMENT.md
