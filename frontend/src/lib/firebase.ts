@@ -9,16 +9,28 @@ import {
 } from "firebase/auth";
 
 // Google sign-in finishes on `https://<authDomain>/__/auth/handler`. When that's a different site
-// from the page (firebaseapp.com while the app runs on web.app), phone browsers keep the two
-// sites' storage apart, the result never reaches the page, and a completed sign-in fails with
-// auth/popup-closed-by-user. Firebase Hosting serves the handler on each of the project's hosting
-// domains, so there the page's own domain is used. Each such domain's handler must be listed
-// under "Authorized redirect URIs" on the project's Google OAuth client.
+// from the page, phone browsers keep the two sites' storage apart, the result never reaches the
+// page, and a completed sign-in fails with auth/popup-closed-by-user. So on the hosted site, sign-in
+// always finishes on the page's own domain.
+//
+// Google only accepts a handler listed under "Authorized redirect URIs" on the project's OAuth
+// client. firebaseapp.com's is registered automatically; web.app's isn't. So signInDomains lists
+// the hosting domains that can finish sign-in, and the others forward visitors to the first one.
+// To serve the app on web.app directly, register its handler (see frontend/DEPLOYMENT.md) and
+// add `${projectId}.web.app` here.
 const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
 const hostingDomains = [`${projectId}.web.app`, `${projectId}.firebaseapp.com`];
-const authDomain = hostingDomains.includes(window.location.hostname)
-  ? window.location.hostname
-  : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+const signInDomains = [`${projectId}.firebaseapp.com`];
+
+const host = window.location.hostname;
+export const redirectingToSignInDomain = hostingDomains.includes(host) && !signInDomains.includes(host);
+if (redirectingToSignInDomain) {
+  const { pathname, search, hash } = window.location;
+  window.location.replace(`https://${signInDomains[0]}${pathname}${search}${hash}`);
+}
+
+// Local development (localhost) keeps the configured auth domain.
+const authDomain = signInDomains.includes(host) ? host : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
