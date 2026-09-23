@@ -1,0 +1,26 @@
+# Backend
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+backend/serviceAccountKey.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Root (docker-compose build args)
+/.env
+
+# Firebase CLI deploy cache
+.firebase/
+
+# Private deployment guides (kept local, not published)
+backend/DEPLOYMENT.md
+frontend/DEPLOYMENT.md
+
+# OS / editors
+.DS_Store
+*.log

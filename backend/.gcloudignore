@@ -1,0 +1,9 @@
+# Files not uploaded by `gcloud run deploy --source backend`.
+# Keeps secrets and the local virtualenv out of the Cloud Build upload.
+.gcloudignore
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+serviceAccountKey.json
