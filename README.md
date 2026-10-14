@@ -9,8 +9,8 @@ each with its cover, author and rating, plus a short explanation of why it fits 
 Sign in with any Google account. Your conversations are saved to your account so you can come
 back to them, and you can delete any of them from the sidebar.
 
-It runs on a FastAPI backend with a Google Gemini agent that looks books up in the Google
-Books catalog, and a React frontend where you sign in with your Google account and chat.
+It runs on a FastAPI backend with an AI agent (a model hosted on NVIDIA's API) that looks books
+up in the Google Books catalog, and a React frontend where you sign in with your Google account and chat.
 
 ## What it does
 
@@ -40,13 +40,13 @@ forced search.
 
 - **Real books, not invented ones.** The assistant is instructed never to recommend a title
   it hasn't looked up. If the first search doesn't fit, it can try different searches (up to
-  four rounds per reply) before answering.
+  two rounds per reply) before answering.
 - **Reasons, not just lists.** Each reply explains in a sentence or two why a book matches
   what you asked for.
 - **A shelf of results.** The books appear under the reply as covers on a shelf, with title,
   author and Google Books rating. Each one links to its Google Books page, where you can read
-  a preview and find where to buy or borrow it. The shelf shows every book found while
-  answering, so it can include a few more than the reply discusses. Books without a cover
+  a preview and find where to buy or borrow it. The shelf shows the books the reply
+  recommends, in the order it names them, with duplicate editions merged. Books without a cover
   image get a plain cloth-style cover with their title.
 - **It learns your taste.** After every exchange, the assistant updates a short summary of
   your reading preferences: favourite genres, authors, themes, moods, and things you
@@ -60,7 +60,8 @@ forced search.
   every request, and you only ever see your own conversations.
 - **Patient with slow answers.** A reply that needs several searches can take a while. The
   app waits up to 90 seconds, and if that runs out it keeps checking for the finished reply
-  instead of losing it. Temporary errors from Gemini are retried automatically.
+  instead of losing it. Temporary errors from the AI service and Google Books are retried
+  automatically.
 - **Comfortable to use.** Light, dark, or follow-your-system theme (remembered in your
   browser). Works on phones, where the conversation list becomes a slide-out drawer.
   Keyboard focus is always visible, and animation is turned off if your system asks for
@@ -70,6 +71,8 @@ forced search.
 
 - Book details come from Google Books, so covers, descriptions and especially ratings are
   missing for some books.
+- Picks are limited to what Google Books search returns. Its results can be noisy, so the
+  assistant sometimes recommends a lesser-known book over a famous one.
 - The assistant sees the most recent 20 messages of a conversation (`CHAT_HISTORY_LIMIT`),
   and reopening a conversation shows those same 20 messages.
 - The sidebar lists your 50 most recent conversations.
@@ -91,7 +94,7 @@ sequenceDiagram
     participant F as Frontend (React)
     participant B as Backend (FastAPI)
     participant S as Firestore
-    participant G as Gemini
+    participant G as AI model (NVIDIA)
     participant GB as Google Books
 
     U->>F: Type a request
@@ -99,7 +102,7 @@ sequenceDiagram
     B->>B: Verify the token
     B->>S: Load recent messages + your taste summary
     B->>G: Your message, history, summary, and the search_books tool
-    loop Up to 4 rounds, as needed
+    loop Up to 2 rounds, as needed
         G->>B: search_books("cozy fantasy found family")
         B->>GB: Search the catalog
         GB-->>B: Matching books
@@ -154,7 +157,7 @@ so the security rules in `firestore.rules` deny all client access.
   reply are dropped.
 - **Strict CORS.** The API only accepts browser requests from the configured frontend URLs,
   and only the methods and headers the app uses, without cookies.
-- **Secrets stay on the server.** The Gemini, Google Books and Firebase admin keys are only
+- **Secrets stay on the server.** The NVIDIA, Google Books and Firebase admin keys are only
   used by the backend. `.gitignore` keeps `.env` files and the service-account key out of the
   repository. The `VITE_*` frontend values are public by design (they identify the Firebase
   project) and contain no secrets.
@@ -167,7 +170,7 @@ so the security rules in `firestore.rules` deny all client access.
 | Frontend | React 19, TypeScript, Vite |
 | Sign-in | Firebase Authentication (Google) |
 | Backend | Python, FastAPI |
-| AI | Google Gemini via the `google-genai` SDK, with function calling |
+| AI | A model hosted on NVIDIA's API (Nemotron 3 Super by default), called through NVIDIA's OpenAI-compatible endpoint with the `openai` SDK, using tool calling |
 | Book data | Google Books API |
 | Database | Cloud Firestore |
 
@@ -182,7 +185,7 @@ backend/
     dependencies/rate_limit.py  per-user rate limits, stored in Firestore
     routers/chat.py          conversations and the chat endpoint
     routers/books.py         direct Google Books search
-    services/gemini_agent.py the assistant: instructions, search tool loop, taste summary
+    services/book_agent.py   the assistant: instructions, search tool loop, taste summary
     services/google_books.py Google Books API client
     services/firebase_service.py  Firestore reads and writes
   Dockerfile
@@ -222,7 +225,8 @@ are at `/docs` when the backend is running (unless `API_DOCS_ENABLED=false`).
 
 1. **Google Books API key**: Google Cloud Console → enable "Books API" → create an API key
    (restrict it to the Books API). Used server-side only.
-2. **Gemini API key**: https://aistudio.google.com/apikey
+2. **NVIDIA API key**: https://build.nvidia.com → sign in → **Get API Key** (it starts with
+   `nvapi-`). Used server-side only.
 3. **Firebase project**: https://console.firebase.google.com
    - Enable **Authentication → Sign-in method → Google**.
    - Enable **Firestore Database**, with rules that deny client access (see "What's stored").
@@ -238,7 +242,7 @@ cd backend
 python -m venv .venv
 ./.venv/Scripts/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env            # fill in GEMINI_API_KEY, GOOGLE_BOOKS_API_KEY, FIREBASE_PROJECT_ID
+cp .env.example .env            # fill in NVIDIA_API_KEY, GOOGLE_BOOKS_API_KEY, FIREBASE_PROJECT_ID
 # place serviceAccountKey.json in backend/ (path configured via FIREBASE_SERVICE_ACCOUNT_PATH)
 uvicorn app.main:app --reload --port 8000
 ```
@@ -264,7 +268,7 @@ Each service has its own `Dockerfile` (`backend/Dockerfile`, `frontend/Dockerfil
 
 ```bash
 cp .env.example .env                   # VITE_* web config + CORS_ORIGINS, used at frontend build time
-cp backend/.env.example backend/.env   # GEMINI_API_KEY, GOOGLE_BOOKS_API_KEY, etc.
+cp backend/.env.example backend/.env   # NVIDIA_API_KEY, GOOGLE_BOOKS_API_KEY, etc.
 # place your Firebase service account key at backend/serviceAccountKey.json
 
 docker compose up --build
@@ -297,8 +301,9 @@ so the same images also run on container platforms that assign their own port.
 
 | Variable | Default | What it's for |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | (required) | Gemini API key |
-| `GEMINI_MODEL` | `gemini-3.6-flash` | Model used for replies and taste summaries |
+| `NVIDIA_API_KEY` | (required) | NVIDIA API key from build.nvidia.com |
+| `NVIDIA_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | Model used for replies and taste summaries. Must support tool calling |
+| `NVIDIA_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NVIDIA's OpenAI-compatible endpoint |
 | `GOOGLE_BOOKS_API_KEY` | empty | Books API key. Optional, but without one Google applies much lower request limits |
 | `FIREBASE_PROJECT_ID` | empty | Your Firebase project ID |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` | `./serviceAccountKey.json` | Path to the Firebase service-account key file |

@@ -3,7 +3,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path
-from google.genai import errors as genai_errors
+from openai import APIConnectionError, APIError, APIStatusError, InternalServerError, RateLimitError
 
 from app.config import get_settings
 from app.dependencies.auth import get_current_user
@@ -17,7 +17,7 @@ from app.models.schemas import (
     ChatSessionListResponse,
 )
 from app.services import firebase_service
-from app.services.gemini_agent import generate_reply, summarize_preferences
+from app.services.book_agent import generate_reply, summarize_preferences
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +77,22 @@ async def chat(
 
     try:
         reply_text, books = await generate_reply(payload.message, history, preference_summary)
-    except genai_errors.ServerError as exc:
-        logger.warning("Gemini server error during chat: %s", exc)
+    except RateLimitError as exc:
+        # NVIDIA's own per-account request limit (after the SDK's retries), not ours.
+        logger.warning("NVIDIA API rate limit during chat: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail="The book assistant is temporarily unavailable (upstream AI service is overloaded). Please try again shortly.",
+            detail="The book assistant is busy right now. Please try again in a minute.",
         ) from exc
-    except genai_errors.ClientError as exc:
-        logger.error("Gemini client error during chat: %s", exc)
+    except (InternalServerError, APIConnectionError) as exc:
+        logger.warning("NVIDIA API unavailable during chat: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="The book assistant is temporarily unavailable. Please try again shortly.",
+        ) from exc
+    except APIStatusError as exc:
+        # 400/401/403/404: usually configuration (bad key, model not enabled), so log it loudly.
+        logger.error("NVIDIA API rejected the chat request (%s): %s", exc.status_code, exc)
         raise HTTPException(
             status_code=502,
             detail="The book assistant couldn't process that request. Please try again.",
@@ -106,9 +114,9 @@ async def chat(
         session_title = _derive_title(payload.message)
         await firebase_service.rename_session(uid, session_id, session_title)
 
-    # Preference-summary learning is a second full Gemini call that the user never sees the
+    # Preference-summary learning is a second full AI call that the user never sees the
     # result of directly — run it after the response is sent instead of making the user wait
-    # through two sequential Gemini round-trips (this was doubling response time / timeouts).
+    # through two sequential AI round-trips (this was doubling response time / timeouts).
     background_tasks.add_task(
         _update_preference_summary, uid, preference_summary, payload.message, reply_text
     )
@@ -136,5 +144,5 @@ async def _update_preference_summary(
         updated_summary = await summarize_preferences(previous_summary, user_message, assistant_reply)
         if updated_summary and updated_summary != previous_summary:
             await firebase_service.update_preference_summary(uid, updated_summary)
-    except genai_errors.APIError as exc:
-        logger.warning("Skipping preference-summary update after Gemini error: %s", exc)
+    except APIError as exc:
+        logger.warning("Skipping preference-summary update after NVIDIA API error: %s", exc)

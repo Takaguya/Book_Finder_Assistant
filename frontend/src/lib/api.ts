@@ -65,7 +65,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// Gemini calls (plus retry/backoff on the backend) can legitimately take a while, but a
+// AI calls (plus retry/backoff on the backend) can legitimately take a while, but a
 // request should never hang forever with no feedback — surface a clear timeout error instead.
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();

@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     )
 
     google_books_api_key: str = ""
-    gemini_api_key: str
-    gemini_model: str = "gemini-3.6-flash"
+
+    # The assistant's AI model, served by NVIDIA's OpenAI-compatible API (https://build.nvidia.com).
+    # The model must support tool calling; nemotron-3-super answers a typical turn in ~4s.
+    nvidia_api_key: str
+    nvidia_model: str = "nvidia/nemotron-3-super-120b-a12b"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
 
     firebase_service_account_path: str = "./serviceAccountKey.json"
     # The key file's JSON contents, for hosts where the file itself can't be deployed (Vercel).

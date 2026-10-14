@@ -1,4 +1,4 @@
-"""Per-user rate limits, so one account can't run up the Gemini / Google Books bill or flood
+"""Per-user rate limits, so one account can't run up the AI / Google Books bill or flood
 Firestore.
 
 Counters live in Firestore (`rate_limits/{uid}`) rather than in memory: on serverless hosts like
