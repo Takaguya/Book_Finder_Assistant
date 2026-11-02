@@ -309,7 +309,7 @@ so the same images also run on container platforms that assign their own port.
 | Variable | Default | What it's for |
 | --- | --- | --- |
 | `NVIDIA_API_KEY` | (required) | NVIDIA API key from build.nvidia.com |
-| `NVIDIA_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | Model used for replies and taste summaries. Must support tool calling |
+| `NVIDIA_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` | Model used for replies and taste summaries. Must support tool calling |
 | `NVIDIA_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NVIDIA's OpenAI-compatible endpoint |
 | `GOOGLE_BOOKS_API_KEY` | empty | Books API key. Optional, but without one Google applies much lower request limits |
 | `FIREBASE_PROJECT_ID` | empty | Your Firebase project ID |

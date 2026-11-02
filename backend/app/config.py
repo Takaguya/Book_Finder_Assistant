@@ -13,9 +13,11 @@ class Settings(BaseSettings):
     google_books_api_key: str = ""
 
     # The assistant's AI model, served by NVIDIA's OpenAI-compatible API (https://build.nvidia.com).
-    # The model must support tool calling; nemotron-3-super answers a typical turn in ~4s.
+    # The model must support tool calling. NVIDIA retires models from its API without notice (it then
+    # answers 404 "Function ... Not found for account"), so this was moved off nemotron-3-super in
+    # 2026-11. nemotron-3.5-super took ~30s for a turn with searches and three recommendations.
     nvidia_api_key: str
-    nvidia_model: str = "nvidia/nemotron-3-super-120b-a12b"
+    nvidia_model: str = "nvidia/nemotron-3.5-super-vl-120b-a12b"
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
 
     firebase_service_account_path: str = "./serviceAccountKey.json"
