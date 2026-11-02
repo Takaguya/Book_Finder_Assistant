@@ -158,7 +158,7 @@ so the security rules in `firestore.rules` deny all client access.
 - **Strict CORS.** The API only accepts browser requests from the configured frontend URLs,
   and only the methods and headers the app uses, without cookies.
 - **Secrets stay on the server.** The NVIDIA, Google Books and Firebase admin keys are only
-  used by the backend. `.gitignore` keeps `.env` files and the service-account key out of the
+  used by the backend. `.env` files and the service-account key are never committed to the
   repository. The `VITE_*` frontend values are public by design (they identify the Firebase
   project) and contain no secrets.
 - **API docs can be switched off** with `API_DOCS_ENABLED=false`.

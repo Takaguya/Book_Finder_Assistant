@@ -8,9 +8,7 @@ __pycache__/
 .env
 serviceAccountKey.json
 
-# Used only by the Docker / Cloud Run deploys
+# Not needed on Vercel
 Dockerfile
 .dockerignore
-.gcloudignore
-cloudrun.env.yaml
 DEPLOYMENT.md
