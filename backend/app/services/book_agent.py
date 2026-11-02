@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # keep refining its search indefinitely (a prompt rule didn't reliably stop it), so the budget is
 # enforced here.
 MAX_TOOL_ROUNDS = 2
+# The model can ask for several searches in one round; past this many, the extra ones are refused,
+# so one message costs at most MAX_TOOL_ROUNDS * MAX_SEARCHES_PER_ROUND Google Books calls.
+MAX_SEARCHES_PER_ROUND = 3
 # Most books to put on the shelf under one reply.
 MAX_SHELF_BOOKS = 10
 # Sent when the search budget runs out. NVIDIA's endpoint ignores tool_choice="none" for this
@@ -95,8 +98,9 @@ SEARCH_BOOKS_TOOL = {
 def _client() -> AsyncOpenAI:
     # A fresh client per call (closed via `async with`): serverless hosts may run each request on
     # a different event loop, and an HTTP client can't be shared across loops. max_retries makes
-    # the SDK retry rate-limit (429) and server (5xx) errors with backoff; the timeout keeps one
-    # slow call from eating the frontend's 90s budget for the whole turn.
+    # the SDK retry rate-limit (429), server (5xx) and timed-out calls with backoff. One turn can
+    # make several calls, so the whole turn also has a deadline (REPLY_DEADLINE_SECONDS in
+    # app/routers/chat.py) that keeps it inside the frontend's 90s wait.
     settings = get_settings()
     return AsyncOpenAI(
         api_key=settings.nvidia_api_key,
@@ -261,11 +265,16 @@ async def generate_reply(
                 "content": message.content or "",
                 "tool_calls": [call.model_dump(exclude_none=True) for call in message.tool_calls],
             })
+            searches = 0
             for call in message.tool_calls:
-                if call.function.name == "search_books":
-                    payload = await _run_search_books(call.function.arguments, found_books)
-                else:
+                # Every tool call needs an answer, so refused ones get an error rather than nothing.
+                if call.function.name != "search_books":
                     payload = {"error": f"Unknown tool '{call.function.name}'."}
+                elif searches >= MAX_SEARCHES_PER_ROUND:
+                    payload = {"error": "Too many searches at once. Use the results you already have."}
+                else:
+                    searches += 1
+                    payload = await _run_search_books(call.function.arguments, found_books)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(payload)})
 
         # Search budget used up: tell the model to answer with what it has found.

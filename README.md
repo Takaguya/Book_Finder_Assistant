@@ -138,17 +138,21 @@ so the security rules in `firestore.rules` deny all client access.
 - **Sign-in on every request.** Every endpoint except the health check requires a valid
   Firebase ID token, verified by the backend. All data is stored under the signed-in user's
   ID, so one account can never reach another's conversations.
-- **Per-user rate limits.** Chat messages, new conversations and book searches are limited
-  per account (see "Limitations" and `RATE_LIMIT_*` in Configuration). The counters live in
+- **Per-user rate limits.** Chat messages and new conversations are limited per account (see
+  "Limitations" and `RATE_LIMIT_*` in Configuration), and one message can trigger at most 6
+  Google Books searches. The counters live in
   Firestore rather than in server memory, so they hold across every server instance, and a
   transaction makes them exact even under a burst of simultaneous requests. A refused request
   gets `429 Too Many Requests` with a `Retry-After` header and doesn't use up any allowance.
 - **The assistant stays on topic.** It's instructed to decline unrelated work (code, essays,
   homework, general questions) and to ignore messages that try to override its instructions,
   so it can't be used as a free general-purpose chatbot on your API key.
-- **Input limits.** Messages are capped at 4,000 characters, book searches at 200, and IDs are
-  checked against strict patterns before they reach Firestore or Google Books. The search size
-  the AI model can request is capped too, since its tool arguments are model output.
+- **Input limits.** Messages are capped at 4,000 characters, and conversation IDs are checked
+  against a strict pattern before they reach Firestore. The AI model's book searches are capped
+  too (200 characters, 10 results, 3 per round), since its tool arguments are model output.
+- **Replies have a time limit.** If a reply isn't ready within 75 seconds, the request ends with
+  a "took too long" error before the frontend stops waiting, and nothing is saved, so sending the
+  message again can't duplicate it.
 - **Firestore locked down.** `firestore.rules` denies all direct client access.
 - **Browser protections.** The site sends a Content Security Policy, blocks being embedded in
   other sites (clickjacking), and sets `nosniff` and a strict referrer policy. Book links and
@@ -161,7 +165,8 @@ so the security rules in `firestore.rules` deny all client access.
   used by the backend. `.env` files and the service-account key are never committed to the
   repository. The `VITE_*` frontend values are public by design (they identify the Firebase
   project) and contain no secrets.
-- **API docs can be switched off** with `API_DOCS_ENABLED=false`.
+- **API docs are off by default.** `/docs` and `/openapi.json` are only served when
+  `API_DOCS_ENABLED=true`, which is meant for local development.
 
 ## Tech stack
 
@@ -184,10 +189,10 @@ backend/
     dependencies/auth.py     verifies the Firebase sign-in token on each request
     dependencies/rate_limit.py  per-user rate limits, stored in Firestore
     routers/chat.py          conversations and the chat endpoint
-    routers/books.py         direct Google Books search
     services/book_agent.py   the assistant: instructions, search tool loop, taste summary
     services/google_books.py Google Books API client
     services/firebase_service.py  Firestore reads and writes
+  tests/                     unit tests (python -m unittest discover -s tests)
   Dockerfile
 frontend/
   src/
@@ -204,9 +209,9 @@ firestore.rules              denies all direct client access to Firestore
 ## API
 
 Every endpoint except `/api/health` needs an `Authorization: Bearer <Firebase ID token>`
-header. `POST /api/chat`, `POST /api/chat/sessions` and the book endpoints are rate-limited
-per user and answer `429` with a `Retry-After` header when a limit is reached. Interactive docs
-are at `/docs` when the backend is running (unless `API_DOCS_ENABLED=false`).
+header. `POST /api/chat` and `POST /api/chat/sessions` are rate-limited per user and answer
+`429` with a `Retry-After` header when a limit is reached. Interactive docs are at `/docs` when
+the backend runs with `API_DOCS_ENABLED=true`.
 
 | Method | Path | What it does |
 | --- | --- | --- |
@@ -216,8 +221,6 @@ are at `/docs` when the backend is running (unless `API_DOCS_ENABLED=false`).
 | `POST` | `/api/chat/sessions` | Start a conversation |
 | `GET` | `/api/chat/sessions/{id}/messages` | A conversation's recent messages |
 | `DELETE` | `/api/chat/sessions/{id}` | Delete a conversation and all its messages |
-| `GET` | `/api/books/search?q=...&max_results=...` | Search Google Books directly (1 to 40 results) |
-| `GET` | `/api/books/{volume_id}` | One book's details |
 
 ## Getting started
 
@@ -247,7 +250,11 @@ cp .env.example .env            # fill in NVIDIA_API_KEY, GOOGLE_BOOKS_API_KEY, 
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs at http://localhost:8000/docs once running.
+API docs are at http://localhost:8000/docs once running, as long as `.env` has
+`API_DOCS_ENABLED=true` (as in `.env.example`).
+
+Run the tests from `backend/` with `python -m unittest discover -s tests`. They use fakes for
+the AI, Google Books and Firestore, so they need no keys or network.
 
 ### 3. Frontend
 
@@ -313,8 +320,7 @@ so the same images also run on container platforms that assign their own port.
 | `RATE_LIMIT_CHAT_PER_MINUTE` | `6` | Chat messages per user per minute |
 | `RATE_LIMIT_CHAT_PER_DAY` | `100` | Chat messages per user per day (resets at 00:00 UTC) |
 | `RATE_LIMIT_NEW_SESSIONS_PER_HOUR` | `20` | New conversations per user per hour |
-| `RATE_LIMIT_BOOK_SEARCHES_PER_MINUTE` | `20` | Calls to the `/api/books` endpoints per user per minute |
-| `API_DOCS_ENABLED` | `true` | Serve `/docs` and `/openapi.json`. Set to `false` on public deployments |
+| `API_DOCS_ENABLED` | `false` | Serve `/docs` and `/openapi.json`. Turn on only for local development |
 
 Setting any `RATE_LIMIT_*` value to `0` turns that limit off.
 

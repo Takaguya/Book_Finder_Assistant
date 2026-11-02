@@ -32,11 +32,10 @@ class Settings(BaseSettings):
     rate_limit_chat_per_minute: int = 6
     rate_limit_chat_per_day: int = 100
     rate_limit_new_sessions_per_hour: int = 20
-    rate_limit_book_searches_per_minute: int = 20
 
-    # FastAPI's interactive docs at /docs and /openapi.json. Turn off on public deployments so the
-    # API isn't advertised.
-    api_docs_enabled: bool = True
+    # FastAPI's interactive docs at /docs and /openapi.json. Off unless turned on (in a local .env),
+    # so a public deployment never advertises the API by accident.
+    api_docs_enabled: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

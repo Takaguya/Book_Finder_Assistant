@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from typing import Annotated
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 MAX_TITLE_LENGTH = 48
+# The whole reply (every AI call and book search in it) must finish within this, so it ends before
+# the frontend stops waiting (90s in frontend/src/lib/api.ts) and nothing gets saved for a reply
+# the user never saw.
+REPLY_DEADLINE_SECONDS = 75
 
 SessionId = Annotated[str, Path(pattern=SESSION_ID_PATTERN)]
 
@@ -76,7 +81,15 @@ async def chat(
     is_first_message = len(history) == 0
 
     try:
-        reply_text, books = await generate_reply(payload.message, history, preference_summary)
+        async with asyncio.timeout(REPLY_DEADLINE_SECONDS):
+            reply_text, books = await generate_reply(payload.message, history, preference_summary)
+    except TimeoutError as exc:
+        # Nothing has been saved yet, so sending the message again can't duplicate it.
+        logger.warning("Chat reply missed the %ss deadline", REPLY_DEADLINE_SECONDS)
+        raise HTTPException(
+            status_code=504,
+            detail="The book assistant took too long to answer. Please try again.",
+        ) from exc
     except RateLimitError as exc:
         # NVIDIA's own per-account request limit (after the SDK's retries), not ours.
         logger.warning("NVIDIA API rate limit during chat: %s", exc)
@@ -146,3 +159,6 @@ async def _update_preference_summary(
             await firebase_service.update_preference_summary(uid, updated_summary)
     except APIError as exc:
         logger.warning("Skipping preference-summary update after NVIDIA API error: %s", exc)
+    except Exception:
+        # Runs after the response was sent, so there's no one to report a failure to; just log it.
+        logger.exception("Preference-summary update failed for uid=%s", uid)

@@ -50,13 +50,6 @@ def _new_session_limits(s: Settings) -> list[Limit]:
     ]
 
 
-def _book_search_limits(s: Settings) -> list[Limit]:
-    return [
-        Limit("books_minute", s.rate_limit_book_searches_per_minute, 60,
-              "Too many book searches. Try again in {wait}."),
-    ]
-
-
 def check_limits(state: dict, limits: list[Limit], now: float) -> tuple[dict | None, tuple[Limit, int] | None]:
     """Pure decision step: given the stored counters, either returns the counter updates to write
     (request allowed) or the rule that blocks it plus the seconds until it resets."""
@@ -110,4 +103,3 @@ def _rate_limited(limits_for: Callable[[Settings], list[Limit]]):
 # each returns the signed-in user just like get_current_user.
 limit_chat = _rate_limited(_chat_limits)
 limit_new_sessions = _rate_limited(_new_session_limits)
-limit_book_searches = _rate_limited(_book_search_limits)

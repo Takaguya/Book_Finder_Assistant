@@ -60,12 +60,3 @@ async def search_books(query: str, max_results: int = 8) -> BookSearchResponse:
         total_items=data.get("totalItems", 0),
         results=[_parse_volume(item) for item in items],
     )
-
-
-async def get_book(volume_id: str) -> BookResult | None:
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await _get(client, f"{BASE_URL}/{volume_id}")
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
-        return _parse_volume(response.json())
